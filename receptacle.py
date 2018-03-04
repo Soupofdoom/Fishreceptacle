@@ -2,12 +2,15 @@ import datetime
 import time
 import random
 import outputgpio
+import threading
+from math import ceil
 #Settings
-beginsunup = 08
-sunup = 09
+beginsunup = 8
+sunup = 9
 stormstart = 20 #Start of storm (24H)
 stormstop = 21 #End of strom (24H)
-resetday = 6 #Day of randomisation
+resetday = 6 #Day of randomisation, Sunday = 0
+
 #Define GPIO pins for RGB
 #Pair1
 R1 = 2
@@ -93,29 +96,48 @@ def lamptest():
         time.sleep(5)
         outputgpio.set_value(0)
         print("Test Complete")
-   
+
 def sunrise():
-        if beginsunup < now < sunup:
             print("Sunup")
-   
-    
-#Program loop
-while 1 != 2:
+            redaim = 50
+            redlevel = 0
+            greenaim = 50
+            greenlevel = 0
+            blueaim = 50
+            bluelevel = 0
+            threading.start_new_thread(outputgpio.fadein(redaim,  redlevel))
+            #thread.start_new_thread(outputgpio.fadein(greenaim,  greenlevel))
+            #thread.start_new_thread(outputgpio.fadein(blueaim,  bluelevel))
+            time.sleep(60)
+            
+def RGBPercentages(RGBPercent):
+        RGBPercent = int(ceil(128/100*RGBPercent))
+        print('Percentage output level:', RGBPercent)
+        return RGBPercent
+#Program loop ---------------------------------------------------------------------------------------------------------
+while 1 != 2:    
     today =int(datetime.date.today().strftime("%w"))
     now = int(datetime.datetime.now().strftime("%H"))
+    #RGBPercentages(int(input('%?'))) #Debugging Line
+    while 1 == 1: #beginsunup <= now < sunup:
+        sunrise()
     if today == resetday and hasrandomed == False: 
         whatday = randomday()
         hasrandomed = True
-    if today == whatday and stormstart < now < stormstop:
+    
+    while today == whatday and stormstart <= now < stormstop:
             print('Make it rain!')
+            break
+    
     print('Today:', today)
     print('whatday:', whatday)
     targetlevel = int(input('Where to?'))
-    if targetlevel > 128 or targetlevel < 0:
-        print('Level too high/low, lamptest instead!')
-        lamptest()
-    if targetlevel != level:  
-        if targetlevel < level:
+    
+    if targetlevel != level: 
+        if targetlevel > 128 or targetlevel < 0:
+            print('Level too high/low, lamptest instead!')
+            lamptest() 
+        elif targetlevel < level:
             #if levelstep <=0:
                 #levelstep = levelstep *-1
             outputgpio.fadeout(targetlevel, level)
