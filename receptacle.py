@@ -9,7 +9,7 @@ beginsunup = 8
 sunup = 9
 stormstart = 20 #Start of storm (24H)
 stormstop = 21 #End of strom (24H)
-resetday = 6 #Day of randomisation, Sunday = 0
+resetday = 0 #Day of randomisation, Sunday = 0
 
 #Define GPIO pins for RGB
 #Pair1
@@ -32,7 +32,7 @@ B4 = 26
 R5 =14
 G5 = 15
 B5 = 18
-#Spares
+#-------Spares
 #24
 #25
 #8
@@ -43,12 +43,19 @@ B5 = 18
 #21
 #17
 
-#define vars
+#define vars + Setup
 level = 0
 targetlevel = 0
 whatday = 0
 hasrandomed = False
 levelstep = 1
+today = 0
+now = 0
+red = 0
+green = 0
+blue = 0
+HEX_value = '#000000'
+
 #Define Functions
 def randomday():
         x = random.randint(1, 7)
@@ -97,54 +104,104 @@ def lamptest():
         outputgpio.set_value(0)
         print("Test Complete")
 
-def sunrise():
-            print("Sunup")
-            redaim = 50
-            redlevel = 0
-            greenaim = 50
-            greenlevel = 0
-            blueaim = 50
-            bluelevel = 0
-            threading.start_new_thread(outputgpio.fadein(redaim,  redlevel))
-            #thread.start_new_thread(outputgpio.fadein(greenaim,  greenlevel))
-            #thread.start_new_thread(outputgpio.fadein(blueaim,  bluelevel))
-            time.sleep(60)
+def fadein(targetlevel,  level):
+    for level in range(level, targetlevel, 1):
+        print ('level:' + str(level))
+        outputgpio.set_value(level)
+        print('Within the thread')
+        #time.sleep(0.1)
+    
+        
+def fadeout(targetlevel,  level):
+    for level in range(level, targetlevel,  -1):
+        print ('level:' + str(level))
+        outputgpio.set_value(level)
+        #time.sleep(0.1)
+    level = targetlevel   
+         
+def decideinorout(targetlevel, level):
+    if targetlevel != level:
+        if targetlevel > 129 or targetlevel < -1:
+            print('Level too high/low, lamptest instead!')
+            lamptest() 
+        elif targetlevel < level:
+            #if levelstep <=0:
+                #levelstep = levelstep *-1
+            fadeout(targetlevel, level)
+        elif targetlevel > level:
+            #if levelstep >= 0:
+                #levelstep = levelstep * -1
+            fadein(targetlevel,  level)
             
-def RGBPercentages(RGBPercent):
-        RGBPercent = int(ceil(128/100*RGBPercent))
-        print('Percentage output level:', RGBPercent)
-        return RGBPercent
-#Program loop ---------------------------------------------------------------------------------------------------------
-while 1 != 2:    
+     
+    
+    
+def hex_to_rgb(HEX_value):
+    HEX_value = HEX_value.lstrip('#')
+    lv = len(HEX_value)
+    return tuple(int(HEX_value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
+    
+def RGB_to_pot(red,  green,  blue):
+        print(red,  green,  blue,  'Func start')
+        red = red/255*100
+        green = green/255*100
+        blue = blue/255*100
+        red = int(ceil(128/100*red))
+        green = int(ceil(128/100*green))
+        blue = int(ceil(128/100*blue))
+        print('Pot output level:', red, green, blue)
+        return red,  green,  blue
+        
+def timeparameters():
     today =int(datetime.date.today().strftime("%w"))
     now = int(datetime.datetime.now().strftime("%H"))
-    #RGBPercentages(int(input('%?'))) #Debugging Line
+    return today, now
+def multitest(red):
+    print(red,  'ITS ALIVE')
+#Program loop ---------------------------------------------------------------------------------------------------------
+while 1 != 2:    
+    today,  now = timeparameters()
+    print('Pre:', targetlevel, level)
+    HEX_value=str(input('Where to?'))
+    red,  green,  blue = hex_to_rgb(HEX_value)
+    red ,  green,  blue = RGB_to_pot(red,  green,  blue)
+    targetlevel = int(red)
+    
+    #RThread = threading.Thread(name='RedLED', target=multitest(red))
+    #RThread.start()
+    Testthread = threading.Thread(name='TestThread', target=decideinorout(targetlevel, level))
+    Testthread.start()
+    level = targetlevel
+    print('post', targetlevel, level)
+        #print(red,  green,  blue)
     while 1 == 1: #beginsunup <= now < sunup:
-        sunrise()
+        break
     if today == resetday and hasrandomed == False: 
         whatday = randomday()
         hasrandomed = True
     
-    while today == whatday and stormstart <= now < stormstop:
+    while today == whatday and stormstart == now < stormstop:
             print('Make it rain!')
             break
     
-    print('Today:', today)
-    print('whatday:', whatday)
-    targetlevel = int(input('Where to?'))
+    #print('Today:', today)
+    #print('whatday:', whatday)
+    #print('Now:', now)
     
-    if targetlevel != level: 
-        if targetlevel > 128 or targetlevel < 0:
+    ''''if targetlevel != level: 
+        if targetlevel > 129 or targetlevel < -1:
             print('Level too high/low, lamptest instead!')
             lamptest() 
         elif targetlevel < level:
             #if levelstep <=0:
                 #levelstep = levelstep *-1
             outputgpio.fadeout(targetlevel, level)
+            print(level)
         elif targetlevel > level:
             #if levelstep >= 0:
                 #levelstep = levelstep * -1
             outputgpio.fadein(targetlevel,  level)
         level = targetlevel
-
-    print('end')
+    print(level)
+'''
+print('end')

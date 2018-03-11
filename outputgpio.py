@@ -33,15 +33,3 @@ def set_value(value):
     #print ("Chip Select True")
     #GPIO.output(SPI_CS_PIN, True)
 
-def fadein(targetlevel,  level):
-    for level in range(level, targetlevel, 1):
-        print ('level:' + str(level))
-        set_value(level)
-        time.sleep(0.1)
-    level = targetlevel
-        
-def fadeout(targetlevel,  level):
-    for level in range(level, targetlevel,  -1):
-        print ('level:' + str(level))
-        set_value(level)
-        time.sleep(0.1)
