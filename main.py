@@ -1,32 +1,10 @@
-import time
-import datetime
-import random
-import threading
-#import importlib
-from menu import *
-import RPi.GPIO as GPIO
-from neopixel import *
-    #Welcome to hell.....
-try:
-    exitflag = False
-    errorflag = False
-    #------------------------------------file handling start
-    
-    #-------------------------------- file handling finish / variables begin
-    today = 0
-    now = 0
-    
-    upstart = 0
-    upfinish = 0
-    setstart = 0
-    setfinish = 0
-    stormtime = 0
-    storms = 0
-    stormlength = 0
-    completestring = 0
-
-    selection = 'F'
-    #-------------------------------- variables end / Misc setup begins
+try:    
+    from neopixel import *
+    import RPi.GPIO as GPIO
+    import time
+    import datetime
+    import threading
+    #--------------------GPIO Config
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
     GPIO.setup(23, GPIO.OUT)
@@ -34,11 +12,9 @@ try:
     GPIO.setup(19, GPIO.IN)
     GPIO.setup(20, GPIO.IN)
     GPIO.setup(21, GPIO.IN)
-
-    GPIO.output(25, GPIO.HIGH)
     
     # LED strip configuration:
-    LED_COUNT      = 13      # Number of LED pixels.
+    LED_COUNT      = 60     # Number of LED pixels.
     LED_PIN        = 18      # GPIO pin connected to the pixels (must support PWM!).
     LED_FREQ_HZ    = 800000  # LED signal frequency in hertz (usually 800khz)
     LED_DMA        = 10      # DMA channel to use for generating signal (try 10)
@@ -46,193 +22,106 @@ try:
     LED_INVERT     = False   # True to invert the signal (when using NPN transistor level shift)
     LED_CHANNEL    = 0
     LED_STRIP      = ws.SK6812_STRIP_RGBW
-    #LED_STRIP      = ws.SK6812W_STRIP
+
     # Create NeoPixel object with appropriate configuration.
     strip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL, LED_STRIP)
     # Intialize the library (must be called once before other functions).
     strip.begin()
-    for i in range(strip.numPixels()):
-                    strip.setPixelColor(i, 0)
+    
+   
+    # Define functions which animate LEDs in various ways.
+    def colorWipe(strip, color, wait_ms=50):
+            """Wipe color across display a pixel at a time."""
+            for i in range(strip.numPixels()):
+                    strip.setPixelColor(i, color)
                     strip.show()
-                    time.sleep(0.1)
-    time.sleep(3)
-
-    #-------------------------------- Misc setup complete / Functions start
-    def mainmenu():
-        global selection
-        global upstart
-        global upfinish
-        global setstart
-        global setfinish
-        global stormtime
-        global storms
-        global stormlength
-        global completestring
-        while selection != '0':  
-            print('''Main Menu:
-                1. Timer Settings
-                2. Storm Settings
-                3. Timer output
-                0 - Shutdown''')
-            selection = str(input('Where to?: '))
-            if selection == '1':
-                while selection != '0':
-                    print('Settings Menu:')
-                    print('1. Sunrise Start: ',upstart)
-                    print('2. Sunrise Finish: ', upfinish)
-                    print('3. Sunset Start: ', setstart)
-                    print('4. Sunset Finish: ', setfinish)
-                    print('H - Help')
-                    print('0 - Backup')
-                    selection = 'F'
-                    selection = str(input('Where to? '))
+                    time.sleep(wait_ms/1000.0)
+    def wheel(pos):
+            """Generate rainbow colors across 0-255 positions."""
+            if pos < 85:
+                    return Color(pos * 3, 255 - pos * 3, 0)
+            elif pos < 170:
+                    pos -= 85
+                    return Color(255 - pos * 3, 0, pos * 3)
+            else:
+                    pos -= 170
+                    return Color(0, pos * 3, 255 - pos * 3)	
+    def rainbow(strip, wait_ms=20, iterations=1):
+            """Draw rainbow that fades across all pixels at once."""
+            for j in range(256*iterations):
+                    for i in range(strip.numPixels()):
+                            strip.setPixelColor(i, wheel((i+j) & 255))
+                    strip.show()
+                    time.sleep(wait_ms/1000.0)
+    
+    def colourblend(strip,start,finish,palette):
+        length = (int(finish) - int(start))
+        if length >= 100:
+            length = length * 0.6
+        length = length * 60
+        n = 100 # number of steps in the blend, more is smoother but tends to reduce the update time to unrealistic times and causes extra time on blends or runaways
+        updateinterval = float((length/(n * len(palette))))
+        if updateinterval < 1:
+            updateinterval = 0.1 # prevents a runaway colour train or update intervals of 0
             
-                    if selection == '1':
-                        print('Sunrise start: ', upstart)
-                        update = str(input('New value? (24H):'))
-                        if update != upstart:
-                            if 0 < int(update) <= 2359:
-                                if update < upfinish:
-                                    if len(update) == 4:
-                                        settingsupdate(update, upstart, completestring)
-                                        upstart = update
-                                    else:
-                                        print('ERROR:Invalid value')
-                                        errorflash()
-                                        
-                                else:
-                                    print('ERROR: Invalid value, cannot be greater than sun up finish time!!')
-                                    errorflash()
-                            else:
-                                print('ERROR: Invalid value')
-                                errorflash()
-                    elif selection == '2':
-                        print('Sunrise Finish: ', upfinish)
-                        update = str(input('New value? (24H):'))
-                        if update != upfinish:
-                            if 0 < int(update) <= 2359:
-                                if update > upstart:
-                                    if len(update) == 4:
-                                        settingsupdate(update, upfinish, completestring)
-                                        upfinish = update
-                                    else:
-                                        print('ERROR:Invalid value')
-                                        errorflash()
-                                else:
-                                    print('ERROR: Invalid value, cannot be less that sun up start time!!')
-                                    errorflash()
-                            else:
-                                print('ERROR: Invalid value')
-                                errorflash()
-                    elif selection == '3':
-                        print('Sunset Start: ', setstart)
-                        update = str(input('New value? (24H):'))
-                        if update != setstart:
-                            if 0 < int(update) <= 2359:
-                                if update > setfinish:
-                                    if len(update) == 4:
-                                        settingsupdate(update, setstart, completestring)
-                                        upfinish = update
-                                    else:
-                                        print('ERROR: Invalid value')
-                                        errorflash()
-                                else:
-                                    print('ERROR: Invalid value, cannot be greater that sun down finish time!!')
-                                    errorflash()
-                            else:
-                                print('ERROR: Invalid value')
-                                errorflash()
-                    elif selection == '4':
-                        print('Sunset Finish: ', setfinish)
-                        update = str(input('New value? (24H):'))
-                        if update != setfinish:
-                            if 0 < int(update) <= 2359:
-                                if update > setstart:
-                                    if len(update) == 4:
-                                        settingsupdate(update, setfinish, completestring)
-                                        setfinish = update
-                                    else:
-                                        print('ERROR: Invalid value')
-                                        errorflash()
-                                else:
-                                    print('ERROR: Invalid value, cannot be less that sun down start time!!')
-                                    errorflash()
-                            else:
-                                print('ERROR: Invalid value')
-                                errorflash()
-                    
-                    elif selection == 'H':
-                        print('These settings are the timers for the sunup and sundown functions.')
-                        print('To amend, select the option to change and enter a new value for the hour in 24H format')
-                        print('IMPORTANT: You need to include the 0 (ie 02 for 0200) or errors occur')
-                        selection = 'F'
-                        time.sleep(1)
-                    elif selection == '0':
-                        print('Exiting...')
-                        selection = '0'
-            elif selection == '2':
-                while selection != '0':
-                    print('1. Storm time:',stormtime)
-                    print('2. Storm amount:', storms)
-                    print('3. Storm length:', stormlength)
-                    print('H - Help')
-                    print('0 - Backup')
-                    selection = 'F'
-                    selection = str(input('Where to?:'))
-                    if selection == '1':
-                        update = str(input('What time do you want the storms?:'))
-                        if update != stormtime:
-                            if len(update) == 4:
-                                if 0 <= int(update) <= 2359:
-                                    settingsupdate(update, stormtime, completestring)
-                                    stormtime = update
-                                else:
-                                    print('ERROR: Invalid value')
-                                    errorflash()
-                            else:
-                                print('ERROR: Invalid value length')
-                                errorflash()
-                        else:
-                            print('ERROR: Invalid value')
-                            errorflash()
-                    elif selection == '2':
-                            print('Storm Settings: ', storms)
-                            update = str(input('How many?: (0 is off)'))
-                            if update != storms:
-                                if int(update) <= 7:
-                                    if len(update) != 2:
-                                        update = '0'+update
-                                    settingsupdate(update, storms, completestring)
-                                    storms = update
-                                else:
-                                    print('ERROR: Too many! (Limited to 1 daily!')
-                                    errorflash()
-                    elif selection == '3':
-                        print('Storm length:', stormlength)
-                        update = str(input('How long? (60 is max): '))
-                        if update != storms:
-                            if 0 < int(update) <= 60:
-                                if len(update) != 2:
-                                        update = '0'+update
-                                settingsupdate(update, stormlength, completestring)
-                                stormlength = update
-                            else:
-                                print('ERROR: Too long! (60 mins top!)')
-                                errorflash()
-                    elif selection == 'H':
-                        print('Select storm hour in 24H format (01 = 0100, 23 = 2300)')
-                        print('Select how many days a storm should happen, up to 7')
-                        print('Select how long the storm lasts, up to 60 mins')
-                    elif selection == '0':
-                        print('Exiting..')
-                        #selection = 'F'
-                       
-                    
-            elif selection == '3':
-                print('Today: ',today)
-                print('Now: ',now)
-
-
+        
+        f = 0
+        #updateinterval = 0.01 # debug line, saves waiting >10mins for transisitons
+        for y in range(0,(len(palette))):
+            #print(len(palette))
+            #print(y)
+             
+            f = 0
+            while f < n:
+                #print(y) # y gives out of range @ 2? wtf? Now it doesn't
+                if y == (len(palette)-1):
+                    endpoint = y
+                    break
+                    #print('Complete colours')
+                    #print('Y = len palette - 1 = 0')
+                else:
+                    endpoint = y+1
+                    #print('y+1',endpoint)
+                first = overrun(palette[y][0] + (palette[endpoint][0]-palette[y][0]) * f / n)
+                second = overrun(palette[y][1] + (palette[endpoint][1]-palette[y][1]) * f / n)
+                third = overrun(palette[y][2] + (palette[endpoint][2]-palette[y][2]) * f / n)
+                fourth = overrun(palette[y][3] + (palette[endpoint][3]-palette[y][3]) * f / n)
+                #print(first,second,third,fourth) #debug line
+                for x in range(strip.numPixels()):
+                    #print(first,second,third,fourth)
+                    #strip.setPixelColor(x,Color(palette[y][0],palette[y][1],palette[y][2],palette[y][3]))
+                    strip.setPixelColor(x,Color(first,second,third,fourth))
+                
+                
+                strip.show()
+                
+                time.sleep(updateinterval)
+                f += 1
+            #time.sleep(updateinterval)
+    
+    def brightnesschange(start,finish):
+        global now
+        global exitflag
+        length = ((int(finish) - int(start)) * 0.6) *60
+        interval = length/255
+        '''while exitflag != True:#start < now < finish:
+            for x in range(0,255):
+                strip.setBrightness(overrun(x))
+                print(x)
+                if exitflag == True:
+                    break
+                time.sleep(interval)'''        
+        
+    #------------------- Other non light related functions
+    def overrun(checking):
+        if checking < 0:
+            checking = 0
+            #True = True
+        if checking > 255:
+            checking = 255
+            #False = False
+        return checking
+    
     def filehandling(upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring):
         files = open("parameters.txt","r")
         upstart = files.readline()
@@ -256,36 +145,33 @@ try:
         files = open("days.txt","r")
         stormdays = files.read()
         files.close()
+        validatesettings(upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring)
         return upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring
     
-    def buttonhandler():
-        while exitflag != True:
-            time.sleep(1)
-            if GPIO.input(19) and GPIO.input(20):
-                mainmenu()
-            elif GPIO.input(20):
-                print('Red')
-            elif GPIO.input(21):
-                print('Yellow')
-        
+    def validatesettings(upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring):
+        #clarify rules and regs for timers
+        if int(upfinish) - int(upstart) < 10: #never less than 10 because time.sleep cannot cope with it
+            print('Sunrise is too short!')
+            #update setting with user input
+        if int(setfinish) - int(setstart) < 10:
+            print('Sunset is too short!')
+        #etc etc
+            
     def settingsupdate(update, oldvalue, completestring):
         files = open("parameters.txt","w")
         completestring = completestring.replace(oldvalue,update)
         files.write(completestring)
         files.close()
-
-    def randomday():
-            x = random.randint(1, 7)
-            return str(x)
-    def timeparameters():
+        
+    def timeparameters(): #Monitors the time and day in a seperate thread (started at line
         while exitflag != True:
             global today
             global now
-            today = int(datetime.date.today().strftime("%w"))
-            now = int(datetime.datetime.now().strftime("%H%M"))
-            time.sleep(60)
-        #return today, now
-            #^^ legacy return of the finction
+            today = str(datetime.date.today().strftime("%w"))
+            now = str(datetime.datetime.now().strftime("%H%M"))
+            
+            time.sleep(60) #Here be dragons! Removing this line causes a system wide crash due to resources being consumed. Even a 1 second sleep has a meltdown.
+    
     def errorflash():
         GPIO.output(25, GPIO.LOW)
         for i in range(0,5):
@@ -294,91 +180,122 @@ try:
             GPIO.output(23, GPIO.LOW)
             time.sleep(0.1)
         GPIO.output(25, GPIO.HIGH)
-        
-    # Define functions which animate LEDs in various ways.
-    def colorWipe(strip, color, wait_ms=50):
-            """Wipe color across display a pixel at a time."""
-            for i in range(strip.numPixels()):
-                    strip.setPixelColor(i, color)
-                    strip.show()
-                    time.sleep(wait_ms/1000.0)
-                    
-    def stormLEDS(strip, color, wait_ms=50):
-            for i in range(0, strip.numPixels(), 1):
-                    strip.setPixelColorRGB(i, 255,0,0)
-                    strip.show()
-                    time.sleep(wait_ms/1000)
-            
-    #timerthread = threading.Thread(target=timeparameters)
-    #timerthread.start()
-    #LEDThread = threading.Thread(target=LEDRunner)
-    #LEDThread.start()
-    buttonThread = threading.Thread(target=buttonhandler)
-    buttonThread.start()
-    upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring = filehandling(upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring)
-
-    if int(storms) < 7:
-        files = open("days.txt","r")
-        stormholder = files.read()
-        files.close()
-        while int(storms) != len(stormholder):# #this is to add extra days to the random list or remove some, it doesnt currently work.
-            files = open("days.txt","r")
-            stormholder = files.read()
-            files.close()
-            files = open("days.txt","w")
-            if int(storms) < len(stormholder):
-                #for s in range(0,len(stormholder)-(int(storms))):
-                stormholder = stormholder[0:int(storms)]
-                print(stormholder)
-                files.write(stormholder)
-            elif int(storms) > len(stormholder):
-                for s in range(0,int(storms)-(len(stormholder))):
-                    extra = randomday()
-                    for x in range(0,7):
-                        for q in range(0,len(stormholder)): #check day isnt duplicated
-                            if extra == stormholder[q]:
-                               extra = randomday()
-                               q = 0
-                    stormholder = stormholder+extra
-                    files.write(stormholder)
-                    #print(stormholder)
-            files.close()
-        '''for i in range(0,len(stormholder)): #initialise the list
-            stormdays.append(0)
-        for i in range(0,len(stormholder)):
-            stormdays[i] = int(stormholder[i])
-            print(stormdays[i])'''
-        stormdays = stormholder
-
-    if today == 0:
-        for p in range(0,int(storms)):
-            extra = randomday()
-            stormholder = stormholder+extra
     
-    while exitflag == False:
-        stormLEDS(strip, Color(0, 0, 255))
-        #colorWipe(strip, Color(0, 255, 0))
-        #colorWipe(strip, Color(0, 0, 255))
-        if selection == '0':
-            exitflag = True
-            print('Shutting off everything (Can take up to 1 Minute)')
-            
+    def buttonhandler():
+        while exitflag != True:
+            time.sleep(1)
+            if GPIO.input(20) and GPIO.input(21):
+                print('Both')
+            elif GPIO.input(20):
+                print('Red')
+            elif GPIO.input(21):
+                print('Yellow')
+            elif GPIO.input(19):
+                print('Green?')
+    
+    def color_to_RGB(color):
+        #hopefully
+        return ((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF)
+    #--------Misc setup
+    exitflag = False
+    #--------------------Variable Declaration
+    today = 0
+    now = 0    
+    upstart = 0
+    upfinish = 0
+    setstart = 0
+    setfinish = 0
+    stormtime = 0
+    storms = 0
+    stormlength = 0
+    completestring = 0 #if i dont declare these it doesnt like the next line?
+    upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring = filehandling(upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring)
+    
+    #Thread launching
+    timerthread = threading.Thread(target=timeparameters)
+    timerthread.start()
+    #buttonThread = threading.Thread(target=buttonhandler)
+    #buttonThread.start()
+    
+    #Setupcomplete
+    
+    GPIO.output(25, GPIO.HIGH) 
+    print('Setup Complete, initiating lighting')
+    #---------ACTUAL PROGRAM
+    count = 0
+    #print(upstart, upfinish, setstart, setfinish, stormtime, storms, stormlength, completestring)
+    sunrisecolours = [[0,0,0,0],[255,0,0,128],[0,255,0,25],[0,0,255,255],[24,50,65,38],[10,129,254,8],[255,255,255,255]] #start with 0 & end with 255 for sun coming up, vice versa for down
+    sunsetcolours = [[255,255,255,255],[0,0,125,255],[0,0,0,0]]
+    #validate whether time and sunrise makes sense then set flag
+    
+    sunriseflag = False
+    sunsetflag = False
+    daytimeflag = False
+    
+    while exitflag != True:
+        if int(upfinish) < int(now):
+            sunriseflag = True
+            daytimeflag = True
+        if int(setfinish) < int(now):
+            sunsetflag = True
+            daytimeflag = False
+        #rainbow(strip, wait_ms=20,iterations=1)
+        if int(upstart) <= int(now) <= int(upfinish) and sunriseflag == False:
+            print(int(datetime.datetime.now().strftime("%H%M")))
+            print('Sunrise')
+            colourblend(strip,upstart,upfinish,sunrisecolours)
+            sunriseflag = True
+            daytimeflag = True
+            sunsetflag = False
+            print(int(datetime.datetime.now().strftime("%H%M")))
+            print('Sunrise finish')
+        elif int(setstart) <= int(now) <= int(setfinish) and sunsetflag == False:
+            print(int(datetime.datetime.now().strftime("%H%M")))
+            print('Sunset start')
+            colourblend(strip, setstart, setfinish, sunsetcolours)
+            sunsetflag = True
+            daytimeflag = False
+            sunriseflag = False
+            print(int(datetime.datetime.now().strftime("%H%M")))
+            print('Sunset finish')
+        elif daytimeflag == True:
+            print(int(datetime.datetime.now().strftime("%H%M")))
+            print('Daytime')
+            for x in range(strip.numPixels()):
+                    #print(first,second,third,fourth)
+                    #strip.setPixelColor(x,Color(palette[y][0],palette[y][1],palette[y][2],palette[y][3]))
+                
+                    strip.setPixelColor(x,Color(255,255,255,255))
+                
+                
+            strip.show() #setdark
+        else:
+            print(int(datetime.datetime.now().strftime("%H%M")))
+            print('Nighttime')
+            for x in range(strip.numPixels()):
+                    #print(first,second,third,fourth)
+                    #strip.setPixelColor(x,Color(palette[y][0],palette[y][1],palette[y][2],palette[y][3]))
+                    strip.setPixelColor(x,Color(0,0,0,0))
+                
+                
+            strip.show()#setlight
+            time.sleep(60) # change this from 60 when going live
+        #print(count)
+        count += 1
+       
 
-        
+
 except KeyboardInterrupt:
-    if selection == '0':
-            exitflag = True
-            print('Performing shutdown! Relaunch main.py or reboot pi the reinstate lights!')
     print('Exiting...')
-    colorWipe(strip, Color(0, 0, 0))
-
-finally:
     exitflag = True
-    files.close()
-    timerthread.join()
-    #LEDThread.join()
-    buttonThread.join()
+finally:
     GPIO.output(25, GPIO.LOW)
+    for x in range(0,3):
+        GPIO.output(23, GPIO.HIGH)
+        time.sleep(1/4)
+        GPIO.output(23, GPIO.LOW)
+        time.sleep(1/4)
+    #colorWipe(strip, Color(255, 0, 0))
     colorWipe(strip, Color(0, 0, 0))
     GPIO.cleanup()
     
